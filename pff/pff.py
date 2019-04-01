@@ -112,8 +112,13 @@ class PFFReader(object):
 class PFFLine(list):
     """ An ordered collection of `PFFCell`s """
 
-    def __init__(self, *cells):
-        super(PFFLine, self).__init__(cells)
+    def __init__(self, *elems):
+        super(PFFLine, self).__init__()
+        for elem in elems:
+            if isinstance(elem, PFFCell):
+                self.append(elem)
+            elif isinstance(elem, PFFLine):
+                self.extend(elem)
 
     def write(self, vals):
         """ Write values in vals in the `PFFCell`s contained in this line, and outputs a str corresponding to them
