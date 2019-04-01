@@ -21,8 +21,8 @@ DEFAULT_STR_FILLER_CHAR = ' '
 DEFAULT_INT_FILLER_CHAR = '0'
 
 
-def is_numerical(t):
-    return t in (int, float, complex)
+def is_numerical(typ):
+    return typ in (int, float, complex)
 
 
 class ContentOverflow(Exception):
@@ -82,11 +82,16 @@ class PFFReader(object):
         self.lcount = 0
 
     def __iter__(self):
-        while True:
-            yield self.readline()
+        return self
 
     def __next__(self):
-        return self.readline()
+        line = self.readline()
+        if not line:
+            raise StopIteration
+        return line
+
+    def next(self):
+        return self.__next__()
 
     def chose_line_model(self, line):
         """ Can be overwritten
@@ -104,8 +109,9 @@ class PFFReader(object):
         """
         line = self._file.readline()
         if not line:
-            raise StopIteration
+            return None
         line_model = line_model or self.chose_line_model(line)
+        self.lcount += 1
         return line_model.read(line)
 
 
@@ -154,11 +160,13 @@ class PFFCell(object):
     :param default: default value for this field
     """
 
-    def __init__(self, name, length, type=str, filler=None, align=None, default=''):
+    def __init__(self, name, length, type=str, filler=None, align=None, default=None):
         if align not in ('l', 'r'):
             align = is_numerical(type) and 'r' or 'l'
         if filler is None or len(filler) != 1:
             filler = is_numerical(type) and DEFAULT_INT_FILLER_CHAR or DEFAULT_STR_FILLER_CHAR
+        if default is None or len(default) > length:
+            default = is_numerical(type) and DEFAULT_INT_FILLER_CHAR or DEFAULT_STR_FILLER_CHAR
         self.name = name
         self.length = length
         self.type = type
@@ -199,7 +207,7 @@ class PFFCell(object):
             cur_field_val = self.default
         try:
             cur_field_val = self.type(cur_field_val)
-        except TypeError:
+        except (TypeError, ValueError):
             pass
         dest[self.name] = cur_field_val
         return line[self.length:]

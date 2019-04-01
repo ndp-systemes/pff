@@ -17,4 +17,4 @@
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-from pff import *
+from .pff import PFFReader, PFFWriter, PFFCell, PFFLine, ContentOverflow
