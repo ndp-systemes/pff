@@ -17,7 +17,12 @@
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-DEFAULT_FILLER_CHAR = ' '
+DEFAULT_STR_FILLER_CHAR = ' '
+DEFAULT_INT_FILLER_CHAR = '0'
+
+
+def is_numerical(t):
+    return t in (int, float, complex)
 
 
 class ContentOverflow(Exception):
@@ -97,10 +102,10 @@ class PFFReader(object):
         :param line_model: `PFFLine` to use for this row. If None, then `self.chose_line_model` is called
         :return: a dict associating every cell's name with their values found in line
         """
-        line = self.f.readline()
+        line = self._file.readline()
         if not line:
             raise StopIteration
-        line_model = line_model or self.chose_line_model()
+        line_model = line_model or self.chose_line_model(line)
         return line_model.read(line)
 
 
@@ -144,9 +149,11 @@ class PFFCell(object):
     :param default: default value for this field
     """
 
-    def __init__(self, name, length, type=str, filler=DEFAULT_FILLER_CHAR, align=None, default=''):
+    def __init__(self, name, length, type=str, filler=None, align=None, default=''):
         if align not in ('l', 'r'):
-            align = type in (int, float, complex) and 'r' or 'l'
+            align = is_numerical(type) and 'r' or 'l'
+        if filler is None or len(filler) != 1:
+            filler = is_numerical(type) and DEFAULT_INT_FILLER_CHAR or DEFAULT_STR_FILLER_CHAR
         self.name = name
         self.length = length
         self.type = type
@@ -158,9 +165,9 @@ class PFFCell(object):
         if len(content) > self.length:
             raise ContentOverflow(content, self)
         if self.align == 'l':
-            return content.rjust(self.length, self.filler)
-        elif self.align == 'r':
             return content.ljust(self.length, self.filler)
+        elif self.align == 'r':
+            return content.rjust(self.length, self.filler)
 
     def write(self, vals):
         """ Given a dict of values, takes this field's value, and formats it to fill this cell
@@ -183,5 +190,11 @@ class PFFCell(object):
             cur_field_val = cur_field_val.lstrip(self.filler)
         else:
             cur_field_val = cur_field_val.rstrip(self.filler)
-        dest[self.name] = self.type(cur_field_val)
+        if not cur_field_val:
+            cur_field_val = self.default
+        try:
+            cur_field_val = self.type(cur_field_val)
+        except TypeError:
+            pass
+        dest[self.name] = cur_field_val
         return line[self.length:]
