@@ -71,6 +71,11 @@ class TestPFFWrite(TestPFFRW):
         with self.assertRaises(ContentOverflow):
             self.writer.writerow({'name': "La team Rocket", 'age': 11, 'score': 7.0}, self.short_line)
 
+    def test_05_autotruncates_prevents_content_overflow(self):
+        special_writer = PFFWriter(self.virtual_file, [self.short_line, self.long_line], autotruncate=True)
+        special_writer.writerow({'name': "La team Rocket", 'age': 11, 'score': 7.0}, self.short_line)
+        self.assertEqual(self.virtual_file.getvalue(), "La team 0117.0#####\n")
+
 
 class TestPFFRead(TestPFFRW):
     def test_00_read_standard_line(self):

@@ -139,7 +139,7 @@ class PFFLine(list):
         """
         line = ""
         for cell in self:
-            line += cell.write(vals)
+            line += cell.write(vals, autotruncate=autotruncate)
         return line
 
     def read(self, line):
@@ -152,6 +152,18 @@ class PFFLine(list):
         for cell in self:
             line = cell.read(line, res)
         return res
+
+    def show_debug(self):
+        """ Debug view which outputs informations about the cell composing this line
+
+        :return: a string, listing each and every cell, its offset, length, type and name
+        """
+        offset = 0
+        output = u""
+        for cell in self:
+            output += "%5d %3d %s %s\n" % (offset, cell.length, cell.type, cell.name)
+            offset += cell.length
+        return output
 
 
 class PFFCell(object):
@@ -180,7 +192,9 @@ class PFFCell(object):
         self.default = default
 
     def _justify(self, content, autotruncate=False):
-        if not autotruncate and len(content) > self.length:
+        if autotruncate:
+            content = content[:self.length]
+        elif len(content) > self.length:
             raise ContentOverflow(content, self)
         if self.align == 'l':
             return content.ljust(self.length, self.filler)
