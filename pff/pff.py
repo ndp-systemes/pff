@@ -232,3 +232,24 @@ class PFFCell(object):
             pass
         dest[self.name] = cur_field_val
         return line[self.length:]
+
+
+class PFFBlankCell(PFFCell):
+    """ A blank cell, without any content except the filler char
+    Implements the same methods as a standard `PFFCell`
+
+    :param length: cell length
+    :param name: the field name, will be 'BLANK' if omitted
+    :param filler: char used to fill the field, by default a space
+    """
+
+    type = None
+
+    def __init__(self, length, name=None, filler=' '):
+        super(PFFBlankCell, self).__init__(name or 'BLANK', length, type(None), filler)
+
+    def write(self, vals, autotruncate=False):
+        return self.filler * self.length
+
+    def read(self, line, dest):
+        return line[self.length:]
