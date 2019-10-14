@@ -43,14 +43,16 @@ class PFFWriter(object):
 
     :param f: a file pointer, describing the file where lines will be written
     :param lines: a collection of `PFFLine`s, which will be used to format data and write them in `self.f`
+    :param encoding: format to encode data in (utf-8 by default)
     :param autotruncate: if True, will truncate a value to its cell size instead of raising a ContentOverflow if too
                          long
     """
 
-    def __init__(self, f, lines, autotruncate=False):
+    def __init__(self, f, lines, encoding='utf-8', autotruncate=False):
         self._lines = lines
         self._file = f
         self.lcount = 0
+        self._encoding = encoding
         self._autotruncate = autotruncate
 
     def chose_line_model(self, vals):
@@ -68,7 +70,7 @@ class PFFWriter(object):
         :param line_model: `PFFLine` to use for this row. If None, then `self.chose_line_model` is called
         """
         line_model = line_model or self.chose_line_model(vals)
-        self._file.write(line_model.write(vals, autotruncate=self._autotruncate) + '\n')
+        self._file.write(line_model.write(vals, encoding=self._encoding, autotruncate=self._autotruncate) + '\n')
         self.lcount += 1
 
 
@@ -129,17 +131,18 @@ class PFFLine(list):
             elif isinstance(elem, PFFLine):
                 self.extend(elem)
 
-    def write(self, vals, autotruncate=False):
+    def write(self, vals, encoding, autotruncate=False):
         """ Write values in vals in the `PFFCell`s contained in this line, and outputs a str corresponding to them
 
         :param vals: values to write
-        :return: a str representing the line filled with correct values
+        :param encoding: format to encode the values in
         :param autotruncate: if True, will truncate a value to its cell size instead of raising a ContentOverflow if
                              too long
+        :return: a str representing the line filled with correct values
         """
         line = ""
         for cell in self:
-            line += cell.write(vals, autotruncate=autotruncate)
+            line += cell.write(vals, encoding=encoding, autotruncate=autotruncate)
         return line
 
     def read(self, line):
@@ -201,16 +204,17 @@ class PFFCell(object):
         elif self.align == 'r':
             return content.rjust(self.length, self.filler)
 
-    def write(self, vals, autotruncate=False):
+    def write(self, vals, encoding, autotruncate=False):
         """ Given a dict of values, takes this field's value, and formats it to fill this cell
 
         :param vals: dict of values for the cell's line
-        :return: the corresponding field, justified
+        :param encoding: format to encode the values in
         :param autotruncate: if True, will truncate a value to its cell size instead of raising a ContentOverflow if
                              too long
+        :return: the corresponding field, justified
         """
-        content_str = str(vals.get(self.name, self.default))
-        return self._justify(content_str, autotruncate=autotruncate)
+        content_str = unicode(vals.get(self.name, self.default))
+        return self._justify(content_str, autotruncate=autotruncate).encode(encoding)
 
     def read(self, line, dest):
         """ Considering this line starts with the current field, reads it
@@ -248,7 +252,7 @@ class PFFBlankCell(PFFCell):
     def __init__(self, length, name=None, filler=' '):
         super(PFFBlankCell, self).__init__(name or 'BLANK', length, type(None), filler)
 
-    def write(self, vals, autotruncate=False):
+    def write(self, vals, encoding, autotruncate=False):
         return self.filler * self.length
 
     def read(self, line, dest):
