@@ -32,7 +32,7 @@ class TestPFFRW(unittest.TestCase):
         name_cell = PFFCell('name', 8)
         age_cell = PFFCell('age', 3, type=int)
         score_cell = PFFCell('score', 8, type=float, align='l', filler='#', default='418.0')
-        birth_cell = PFFCell('birthday', 10, type=date)
+        birth_cell = PFFCell('birthday', 10)
         favourite_pokemon_cell = PFFCell('favourite', 128, align='r', default="Evoli")
         town_cell = PFFCell('town', 16)
         region_cell = PFFCell('region', 16)

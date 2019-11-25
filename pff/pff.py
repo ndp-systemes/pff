@@ -180,7 +180,7 @@ class PFFCell(object):
     :param default: default value for this field
     """
 
-    def __init__(self, name, length, type=str, filler=None, align=None, default=None):
+    def __init__(self, name, length, type=unicode, filler=None, align=None, default=None):
         if align not in ('l', 'r'):
             align = is_numerical(type) and 'r' or 'l'
         if filler is None or len(filler) != 1:
@@ -213,7 +213,10 @@ class PFFCell(object):
                              too long
         :return: the corresponding field, justified
         """
-        content_str = unicode(vals.get(self.name, self.default))
+        content_val = vals.get(self.name, self.default)
+        if content_val is None:
+            content_val = self.default
+        content_str = unicode(self.type(content_val))
         return self._justify(content_str, autotruncate=autotruncate).encode(encoding)
 
     def read(self, line, dest):
