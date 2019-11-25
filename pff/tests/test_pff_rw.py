@@ -76,6 +76,49 @@ class TestPFFWrite(TestPFFRW):
         with self.assertRaises(ContentOverflow):
             special_writer.writerow({'name': "La team Rocket", 'age': 11, 'score': 7.0}, self.short_line)
 
+    def test_06_custom_truncate_function(self):
+        def three_dots(text, length):
+            return text[:length - 3] + u"..."
+
+        short_cell_for_long_value = PFFCell('name', 8, truncator=three_dots)
+        special_writer = PFFWriter(self.virtual_file, [PFFLine(short_cell_for_long_value)])
+
+        special_writer.writerow({'name': "La team Rocket"})
+        self.assertEqual(self.virtual_file.getvalue(), "La te...\n")
+
+    def test_10_before_write(self):
+        def backwards(cell, text):
+            return text[::-1]
+
+        def upper(cell, text):
+            return text.upper()
+
+        backwards_name_cell = PFFCell('name', 8, before_write=backwards)
+        normal_fav_cell = PFFCell('favourite', 8)
+        line = PFFLine(backwards_name_cell, normal_fav_cell)
+        upper_writer = PFFWriter(self.virtual_file, [line], before_write=upper)
+
+        upper_writer.writerow({'name': "Sacha", 'favourite': "Pikachu"}, line)
+        self.assertEqual(self.virtual_file.getvalue(), "ahcaS   PIKACHU \n")
+
+    def test_11_after_read(self):
+        def backwards(cell, text):
+            return text[::-1]
+
+        def lower(cell, text):
+            return text.lower()
+
+        backwards_name_cell = PFFCell('name', 8, after_read=backwards)
+        normal_fav_cell = PFFCell('favourite', 8)
+        line = PFFLine(backwards_name_cell, normal_fav_cell)
+        lower_reader = PFFReader(self.virtual_file, [line], after_read=lower)
+
+        self.virtual_file.write("ahcaS   PIKACHU \n")
+        self.virtual_file.seek(0)
+
+        values = lower_reader.readline()
+        self.assertDictEqual(values, {'name': "Sacha", 'favourite': "pikachu"})
+
 
 class TestPFFRead(TestPFFRW):
     def test_00_read_standard_line(self):
