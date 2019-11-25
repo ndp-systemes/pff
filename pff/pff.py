@@ -48,7 +48,7 @@ class PFFWriter(object):
                          long
     """
 
-    def __init__(self, f, lines, encoding='utf-8', autotruncate=False):
+    def __init__(self, f, lines, encoding='utf-8', autotruncate=True):
         self._lines = lines
         self._file = f
         self.lcount = 0
@@ -131,7 +131,7 @@ class PFFLine(list):
             elif isinstance(elem, PFFLine):
                 self.extend(elem)
 
-    def write(self, vals, encoding, autotruncate=False):
+    def write(self, vals, encoding, autotruncate=True):
         """ Write values in vals in the `PFFCell`s contained in this line, and outputs a str corresponding to them
 
         :param vals: values to write
@@ -194,7 +194,7 @@ class PFFCell(object):
         self.align = align
         self.default = default
 
-    def _justify(self, content, autotruncate=False):
+    def _justify(self, content, autotruncate=True):
         if autotruncate:
             content = content[:self.length]
         elif len(content) > self.length:
@@ -204,7 +204,7 @@ class PFFCell(object):
         elif self.align == 'r':
             return content.rjust(self.length, self.filler)
 
-    def write(self, vals, encoding, autotruncate=False):
+    def write(self, vals, encoding, autotruncate=True):
         """ Given a dict of values, takes this field's value, and formats it to fill this cell
 
         :param vals: dict of values for the cell's line
@@ -255,7 +255,7 @@ class PFFBlankCell(PFFCell):
     def __init__(self, length, name=None, filler=' '):
         super(PFFBlankCell, self).__init__(name or 'BLANK', length, type(None), filler)
 
-    def write(self, vals, encoding, autotruncate=False):
+    def write(self, vals, encoding, autotruncate=True):
         return self.filler * self.length
 
     def read(self, line, dest):

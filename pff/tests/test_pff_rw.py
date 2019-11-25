@@ -67,14 +67,14 @@ class TestPFFWrite(TestPFFRW):
         self.writer.writerow({'name': "Sacha", 'age': 11})
         self.assertEqual(self.virtual_file.getvalue(), "Sacha   011418.0###\n")
 
-    def test_04_content_overflow_is_raised(self):
-        with self.assertRaises(ContentOverflow):
-            self.writer.writerow({'name': "La team Rocket", 'age': 11, 'score': 7.0}, self.short_line)
+    def test_04_content_overflow_is_not_raised_by_default(self):
+        self.writer.writerow({'name': "La team Rocket", 'age': 11, 'score': 7.0}, self.short_line)
+        self.assertEqual(self.virtual_file.getvalue(), "La team 0117.0#####\n")
 
     def test_05_autotruncates_prevents_content_overflow(self):
-        special_writer = PFFWriter(self.virtual_file, [self.short_line, self.long_line], autotruncate=True)
-        special_writer.writerow({'name': "La team Rocket", 'age': 11, 'score': 7.0}, self.short_line)
-        self.assertEqual(self.virtual_file.getvalue(), "La team 0117.0#####\n")
+        special_writer = PFFWriter(self.virtual_file, [self.short_line, self.long_line], autotruncate=False)
+        with self.assertRaises(ContentOverflow):
+            special_writer.writerow({'name': "La team Rocket", 'age': 11, 'score': 7.0}, self.short_line)
 
 
 class TestPFFRead(TestPFFRW):
