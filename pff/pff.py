@@ -168,6 +168,33 @@ class PFFLine(list):
             offset += cell.length
         return output
 
+    def __add__(self, other):
+        if isinstance(other, (PFFLine, PFFCell)):
+            return PFFLine(self, other)
+        raise TypeError(u"unsupported operand type(s) for +: '%s' and '%s'" %
+                        (type(self).__name__, type(other).__name__))
+
+    def __iadd__(self, other):
+        if isinstance(other, PFFCell):
+            self.append(other)
+        elif isinstance(other, PFFLine):
+            self.extend(other)
+        else:
+            raise TypeError(u"unsupported operand type(s) for +=: '%s' and '%s'" %
+                            (type(self).__name__, type(other).__name__))
+        return self
+
+    def __eq__(self, other):
+        if len(self) != len(other):
+            return False
+        for (s, o) in zip(self, other):
+            if s != o:
+                return False
+        return True
+
+    def __ne__(self, other):
+        return not self == other
+
 
 class PFFCell(object):
     """ Represent a cell of Python Flat File
@@ -239,6 +266,24 @@ class PFFCell(object):
             pass
         dest[self.name] = cur_field_val
         return line[self.length:]
+
+    def __len__(self):
+        return self.length
+
+    def __add__(self, other):
+        if isinstance(other, (PFFCell, PFFLine)):
+            return PFFLine(self, other)
+        raise TypeError(u"unsupported operand type(s) for +: '%s' and '%s'" %
+                        (type(self).__name__, type(other).__name__))
+
+    def __hash__(self):
+        return hash(self.name)
+
+    def __eq__(self, other):
+        return self.name == getattr(other, 'name', False) and len(self) == len(other)
+
+    def __ne__(self, other):
+        return not self == other
 
 
 class PFFBlankCell(PFFCell):

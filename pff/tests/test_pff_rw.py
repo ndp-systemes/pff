@@ -100,5 +100,53 @@ class TestPFFRead(TestPFFRW):
                              {'name': "Sacha", 'age': 11, 'birthday': '1996-02-27', 'favourite': "Pikachu"})
 
 
+class TestPFFOperatorOverload(unittest.TestCase):
+    def setUp(self):
+        super(TestPFFOperatorOverload, self).setUp()
+
+        self.name_cell = PFFCell('name', 8)
+        self.age_cell = PFFCell('age', 3, type=int)
+        self.score_cell = PFFCell('score', 8, type=float, align='l', filler='#', default='418.0')
+        self.birth_cell = PFFCell('birthday', 10)
+
+    def test_00_cell_equality(self):
+        self.assertEqual(PFFCell('name', 8), PFFCell('name', 8))
+        self.assertNotEqual(PFFCell('name', 8), PFFCell('name', 4))
+        self.assertNotEqual(PFFCell('name', 8), PFFCell('eman', 8))
+
+    def test_01_line_equality(self):
+        self.assertEqual(PFFLine(self.name_cell, self.age_cell, self.birth_cell),
+                         PFFLine(self.name_cell, self.age_cell, self.birth_cell))
+        self.assertNotEqual(PFFLine(self.name_cell, self.age_cell, self.birth_cell),
+                            PFFLine(self.name_cell, self.age_cell))
+        self.assertNotEqual(PFFLine(self.name_cell, self.age_cell, self.birth_cell),
+                            PFFLine(self.name_cell, self.age_cell, self.score_cell))
+        self.assertNotEqual(PFFLine(self.name_cell, self.age_cell, self.birth_cell),
+                            PFFLine(self.name_cell, self.birth_cell, self.age_cell))
+
+    def test_10_cell_addition(self):
+        self.assertEqual(self.name_cell + self.age_cell, PFFLine(self.name_cell, self.age_cell))
+        self.assertEqual(self.name_cell + PFFLine(self.age_cell, self.birth_cell),
+                         PFFLine(self.name_cell, self.age_cell, self.birth_cell))
+
+    def test_11_line_addition(self):
+        line = PFFLine(self.name_cell, self.age_cell)
+
+        self.assertEqual(line + self.birth_cell, PFFLine(self.name_cell, self.age_cell, self.birth_cell))
+        self.assertEqual(line + PFFLine(self.birth_cell, self.score_cell),
+                         PFFLine(self.name_cell, self.age_cell, self.birth_cell, self.score_cell))
+
+    def test_12_line_with_cell_added(self):
+        line = PFFLine(self.name_cell, self.age_cell)
+        line += self.birth_cell
+
+        self.assertEqual(line, PFFLine(self.name_cell, self.age_cell, self.birth_cell))
+
+    def test_13_line_with_line_added(self):
+        line = PFFLine(self.name_cell, self.age_cell)
+        line += PFFLine(self.birth_cell, self.score_cell)
+        self.assertEqual(line, PFFLine(self.name_cell, self.age_cell, self.birth_cell, self.score_cell))
+
+
 if __name__ == '__main__':
     unittest.main()
