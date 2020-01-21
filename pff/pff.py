@@ -25,6 +25,21 @@ def is_numerical(typ):
     return typ in (int, float, complex)
 
 
+def default_truncator(text, len):
+    return text[:len]
+
+
+def default_before_write(cell, text):
+    return cell.type(text)
+
+
+def default_after_read(cell, text):
+    try:
+        return cell.type(text)
+    except (TypeError, ValueError):
+        return text
+
+
 class ContentOverflow(Exception):
     """ Exception raised when the content of a `PFFCell` is larger than the cell itself """
 
@@ -46,14 +61,17 @@ class PFFWriter(object):
     :param encoding: format to encode data in (utf-8 by default)
     :param autotruncate: if True, will truncate a value to its cell size instead of raising a ContentOverflow if too
                          long
+    :param before_write: function called on the content of each cell before casting it to unicode and writing it
+                         (cell: PFFCell, text: Any) -> Any
     """
 
-    def __init__(self, f, lines, encoding='utf-8', autotruncate=False):
+    def __init__(self, f, lines, encoding='utf-8', autotruncate=True, before_write=None):
         self._lines = lines
         self._file = f
         self.lcount = 0
         self._encoding = encoding
         self._autotruncate = autotruncate
+        self._before_write = before_write
 
     def chose_line_model(self, vals):
         """ Can be overwritten
@@ -70,7 +88,8 @@ class PFFWriter(object):
         :param line_model: `PFFLine` to use for this row. If None, then `self.chose_line_model` is called
         """
         line_model = line_model or self.chose_line_model(vals)
-        self._file.write(line_model.write(vals, encoding=self._encoding, autotruncate=self._autotruncate) + '\n')
+        self._file.write(line_model.write(
+            vals, encoding=self._encoding, autotruncate=self._autotruncate, before_write=self._before_write) + '\n')
         self.lcount += 1
 
 
@@ -79,12 +98,16 @@ class PFFReader(object):
 
     :param f: a file pointer, describing the file where lines will be written
     :param lines: a collection of `PFFLine`s, which will be used to format data and write them in `self.f`
+    :param after_read: function called on the content of each cell, after reading it from the source
+                       (cell: PFFCell, text: unicode) -> Any
+
     """
 
-    def __init__(self, f, lines):
+    def __init__(self, f, lines, after_read=None):
         self._lines = lines
         self._file = f
         self.lcount = 0
+        self._after_read = after_read
 
     def __iter__(self):
         return self
@@ -117,7 +140,7 @@ class PFFReader(object):
             return None
         line_model = line_model or self.chose_line_model(line)
         self.lcount += 1
-        return line_model.read(line)
+        return line_model.read(line, after_read=self._after_read)
 
 
 class PFFLine(list):
@@ -131,29 +154,33 @@ class PFFLine(list):
             elif isinstance(elem, PFFLine):
                 self.extend(elem)
 
-    def write(self, vals, encoding, autotruncate=False):
+    def write(self, vals, encoding, autotruncate=True, before_write=None):
         """ Write values in vals in the `PFFCell`s contained in this line, and outputs a str corresponding to them
 
         :param vals: values to write
         :param encoding: format to encode the values in
         :param autotruncate: if True, will truncate a value to its cell size instead of raising a ContentOverflow if
                              too long
+        :param before_write: function called on the content of each cell before casting it to unicode and writing it
+                             (cell: PFFCell, text: Any) -> Any
         :return: a str representing the line filled with correct values
         """
         line = ""
         for cell in self:
-            line += cell.write(vals, encoding=encoding, autotruncate=autotruncate)
+            line += cell.write(vals, encoding=encoding, autotruncate=autotruncate, before_write=before_write)
         return line
 
-    def read(self, line):
+    def read(self, line, after_read=None):
         """ Read a line
 
         :param line: a str that will be read using the current line's `PFFCell`s
+        :param after_read: function called on the content of each cell, after reading it from the source
+                           (cell: PFFCell, text: unicode) -> Any
         :return: a dict associating every cell's name with their values found in line
         """
         res = {}
         for cell in self:
-            line = cell.read(line, res)
+            line = cell.read(line, res, after_read)
         return res
 
     def show_debug(self):
@@ -168,6 +195,33 @@ class PFFLine(list):
             offset += cell.length
         return output
 
+    def __add__(self, other):
+        if isinstance(other, (PFFLine, PFFCell)):
+            return PFFLine(self, other)
+        raise TypeError(u"unsupported operand type(s) for +: '%s' and '%s'" %
+                        (type(self).__name__, type(other).__name__))
+
+    def __iadd__(self, other):
+        if isinstance(other, PFFCell):
+            self.append(other)
+        elif isinstance(other, PFFLine):
+            self.extend(other)
+        else:
+            raise TypeError(u"unsupported operand type(s) for +=: '%s' and '%s'" %
+                            (type(self).__name__, type(other).__name__))
+        return self
+
+    def __eq__(self, other):
+        if len(self) != len(other):
+            return False
+        for (s, o) in zip(self, other):
+            if s != o:
+                return False
+        return True
+
+    def __ne__(self, other):
+        return not self == other
+
 
 class PFFCell(object):
     """ Represent a cell of Python Flat File
@@ -178,9 +232,16 @@ class PFFCell(object):
     :param filler: char used to filled the blanks in this field, if the content is smaller then `length`
     :param align: either 'l' or 'r' ; side to align the cell content (by default, 'r' if `type` is numeric, else 'l')
     :param default: default value for this field
+    :param truncator: function used to truncate the content of the cell to its size
+                      (text: unicode, length: int) -> str
+    :param before_write: function called on the cell content before casting it to unicode and writing it
+                         (cell: PFFCell, text: Any) -> Any
+    :param after_read: function called on the cell content, after reading it from the source
+                       (cell: PFFCell, text: unicode) -> Any
     """
 
-    def __init__(self, name, length, type=str, filler=None, align=None, default=None):
+    def __init__(self, name, length, type=unicode, filler=None, align=None, default=None, truncator=default_truncator,
+                 before_write=None, after_read=None):
         if align not in ('l', 'r'):
             align = is_numerical(type) and 'r' or 'l'
         if filler is None or len(filler) != 1:
@@ -193,10 +254,13 @@ class PFFCell(object):
         self.filler = filler
         self.align = align
         self.default = default
+        self._truncator = truncator
+        self._before_write = before_write
+        self._after_read = after_read
 
-    def _justify(self, content, autotruncate=False):
+    def _justify(self, content, autotruncate=True):
         if autotruncate:
-            content = content[:self.length]
+            content = self._truncator(content, self.length)
         elif len(content) > self.length:
             raise ContentOverflow(content, self)
         if self.align == 'l':
@@ -204,23 +268,34 @@ class PFFCell(object):
         elif self.align == 'r':
             return content.rjust(self.length, self.filler)
 
-    def write(self, vals, encoding, autotruncate=False):
+    def write(self, vals, encoding, autotruncate=True, before_write=None):
         """ Given a dict of values, takes this field's value, and formats it to fill this cell
 
         :param vals: dict of values for the cell's line
         :param encoding: format to encode the values in
         :param autotruncate: if True, will truncate a value to its cell size instead of raising a ContentOverflow if
                              too long
+        :param before_write: function called on the cell content before casting it to unicode and writing it
+                             (cell: PFFCell, text: Any) -> Any
+                             Will not be used if a `before_write` as been defined for this PFFCell in __init__
         :return: the corresponding field, justified
         """
-        content_str = unicode(vals.get(self.name, self.default))
+        content_val = vals.get(self.name, self.default)
+        if content_val is None:
+            content_val = self.default
+        before_write = self._before_write or before_write or default_before_write
+        content_val = before_write(self, content_val)
+        content_str = unicode(content_val)
         return self._justify(content_str, autotruncate=autotruncate).encode(encoding)
 
-    def read(self, line, dest):
+    def read(self, line, dest, after_read=None):
         """ Considering this line starts with the current field, reads it
 
         :param line: line to read, supposed to start with the current cell
         :param dest: dict of values corresponding to the current row, this cell's value will be added to it
+        :param after_read: function called on the cell content, after reading it from the source
+                           (cell: PFFCell, text: unicode) -> Any
+                           Will not be used if a `after_read` as been defined for this PFFCell in __init__
         :return: line, with the current field removed
         """
         cur_field_val = line[:self.length]
@@ -230,12 +305,28 @@ class PFFCell(object):
             cur_field_val = cur_field_val.rstrip(self.filler)
         if not cur_field_val:
             cur_field_val = self.default
-        try:
-            cur_field_val = self.type(cur_field_val)
-        except (TypeError, ValueError):
-            pass
+        after_read = self._after_read or after_read or default_after_read
+        cur_field_val = after_read(self, cur_field_val)
         dest[self.name] = cur_field_val
         return line[self.length:]
+
+    def __len__(self):
+        return self.length
+
+    def __add__(self, other):
+        if isinstance(other, (PFFCell, PFFLine)):
+            return PFFLine(self, other)
+        raise TypeError(u"unsupported operand type(s) for +: '%s' and '%s'" %
+                        (type(self).__name__, type(other).__name__))
+
+    def __hash__(self):
+        return hash(self.name)
+
+    def __eq__(self, other):
+        return self.name == getattr(other, 'name', False) and len(self) == len(other)
+
+    def __ne__(self, other):
+        return not self == other
 
 
 class PFFBlankCell(PFFCell):
@@ -252,8 +343,8 @@ class PFFBlankCell(PFFCell):
     def __init__(self, length, name=None, filler=' '):
         super(PFFBlankCell, self).__init__(name or 'BLANK', length, type(None), filler)
 
-    def write(self, vals, encoding, autotruncate=False):
+    def write(self, vals, encoding, autotruncate=True, before_write=None):
         return self.filler * self.length
 
-    def read(self, line, dest):
+    def read(self, line, dest, after_read=None):
         return line[self.length:]

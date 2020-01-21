@@ -32,7 +32,7 @@ class TestPFFRW(unittest.TestCase):
         name_cell = PFFCell('name', 8)
         age_cell = PFFCell('age', 3, type=int)
         score_cell = PFFCell('score', 8, type=float, align='l', filler='#', default='418.0')
-        birth_cell = PFFCell('birthday', 10, type=date)
+        birth_cell = PFFCell('birthday', 10)
         favourite_pokemon_cell = PFFCell('favourite', 128, align='r', default="Evoli")
         town_cell = PFFCell('town', 16)
         region_cell = PFFCell('region', 16)
@@ -67,14 +67,57 @@ class TestPFFWrite(TestPFFRW):
         self.writer.writerow({'name': "Sacha", 'age': 11})
         self.assertEqual(self.virtual_file.getvalue(), "Sacha   011418.0###\n")
 
-    def test_04_content_overflow_is_raised(self):
-        with self.assertRaises(ContentOverflow):
-            self.writer.writerow({'name': "La team Rocket", 'age': 11, 'score': 7.0}, self.short_line)
+    def test_04_content_overflow_is_not_raised_by_default(self):
+        self.writer.writerow({'name': "La team Rocket", 'age': 11, 'score': 7.0}, self.short_line)
+        self.assertEqual(self.virtual_file.getvalue(), "La team 0117.0#####\n")
 
     def test_05_autotruncates_prevents_content_overflow(self):
-        special_writer = PFFWriter(self.virtual_file, [self.short_line, self.long_line], autotruncate=True)
-        special_writer.writerow({'name': "La team Rocket", 'age': 11, 'score': 7.0}, self.short_line)
-        self.assertEqual(self.virtual_file.getvalue(), "La team 0117.0#####\n")
+        special_writer = PFFWriter(self.virtual_file, [self.short_line, self.long_line], autotruncate=False)
+        with self.assertRaises(ContentOverflow):
+            special_writer.writerow({'name': "La team Rocket", 'age': 11, 'score': 7.0}, self.short_line)
+
+    def test_06_custom_truncate_function(self):
+        def three_dots(text, length):
+            return text[:length - 3] + u"..."
+
+        short_cell_for_long_value = PFFCell('name', 8, truncator=three_dots)
+        special_writer = PFFWriter(self.virtual_file, [PFFLine(short_cell_for_long_value)])
+
+        special_writer.writerow({'name': "La team Rocket"})
+        self.assertEqual(self.virtual_file.getvalue(), "La te...\n")
+
+    def test_10_before_write(self):
+        def backwards(cell, text):
+            return text[::-1]
+
+        def upper(cell, text):
+            return text.upper()
+
+        backwards_name_cell = PFFCell('name', 8, before_write=backwards)
+        normal_fav_cell = PFFCell('favourite', 8)
+        line = PFFLine(backwards_name_cell, normal_fav_cell)
+        upper_writer = PFFWriter(self.virtual_file, [line], before_write=upper)
+
+        upper_writer.writerow({'name': "Sacha", 'favourite': "Pikachu"}, line)
+        self.assertEqual(self.virtual_file.getvalue(), "ahcaS   PIKACHU \n")
+
+    def test_11_after_read(self):
+        def backwards(cell, text):
+            return text[::-1]
+
+        def lower(cell, text):
+            return text.lower()
+
+        backwards_name_cell = PFFCell('name', 8, after_read=backwards)
+        normal_fav_cell = PFFCell('favourite', 8)
+        line = PFFLine(backwards_name_cell, normal_fav_cell)
+        lower_reader = PFFReader(self.virtual_file, [line], after_read=lower)
+
+        self.virtual_file.write("ahcaS   PIKACHU \n")
+        self.virtual_file.seek(0)
+
+        values = lower_reader.readline()
+        self.assertDictEqual(values, {'name': "Sacha", 'favourite': "pikachu"})
 
 
 class TestPFFRead(TestPFFRW):
@@ -98,6 +141,54 @@ class TestPFFRead(TestPFFRW):
         cur_dict = self.reader.readline()
         self.assertDictEqual(cur_dict,
                              {'name': "Sacha", 'age': 11, 'birthday': '1996-02-27', 'favourite': "Pikachu"})
+
+
+class TestPFFOperatorOverload(unittest.TestCase):
+    def setUp(self):
+        super(TestPFFOperatorOverload, self).setUp()
+
+        self.name_cell = PFFCell('name', 8)
+        self.age_cell = PFFCell('age', 3, type=int)
+        self.score_cell = PFFCell('score', 8, type=float, align='l', filler='#', default='418.0')
+        self.birth_cell = PFFCell('birthday', 10)
+
+    def test_00_cell_equality(self):
+        self.assertEqual(PFFCell('name', 8), PFFCell('name', 8))
+        self.assertNotEqual(PFFCell('name', 8), PFFCell('name', 4))
+        self.assertNotEqual(PFFCell('name', 8), PFFCell('eman', 8))
+
+    def test_01_line_equality(self):
+        self.assertEqual(PFFLine(self.name_cell, self.age_cell, self.birth_cell),
+                         PFFLine(self.name_cell, self.age_cell, self.birth_cell))
+        self.assertNotEqual(PFFLine(self.name_cell, self.age_cell, self.birth_cell),
+                            PFFLine(self.name_cell, self.age_cell))
+        self.assertNotEqual(PFFLine(self.name_cell, self.age_cell, self.birth_cell),
+                            PFFLine(self.name_cell, self.age_cell, self.score_cell))
+        self.assertNotEqual(PFFLine(self.name_cell, self.age_cell, self.birth_cell),
+                            PFFLine(self.name_cell, self.birth_cell, self.age_cell))
+
+    def test_10_cell_addition(self):
+        self.assertEqual(self.name_cell + self.age_cell, PFFLine(self.name_cell, self.age_cell))
+        self.assertEqual(self.name_cell + PFFLine(self.age_cell, self.birth_cell),
+                         PFFLine(self.name_cell, self.age_cell, self.birth_cell))
+
+    def test_11_line_addition(self):
+        line = PFFLine(self.name_cell, self.age_cell)
+
+        self.assertEqual(line + self.birth_cell, PFFLine(self.name_cell, self.age_cell, self.birth_cell))
+        self.assertEqual(line + PFFLine(self.birth_cell, self.score_cell),
+                         PFFLine(self.name_cell, self.age_cell, self.birth_cell, self.score_cell))
+
+    def test_12_line_with_cell_added(self):
+        line = PFFLine(self.name_cell, self.age_cell)
+        line += self.birth_cell
+
+        self.assertEqual(line, PFFLine(self.name_cell, self.age_cell, self.birth_cell))
+
+    def test_13_line_with_line_added(self):
+        line = PFFLine(self.name_cell, self.age_cell)
+        line += PFFLine(self.birth_cell, self.score_cell)
+        self.assertEqual(line, PFFLine(self.name_cell, self.age_cell, self.birth_cell, self.score_cell))
 
 
 if __name__ == '__main__':
