@@ -24,6 +24,9 @@ if sys.version_info >= (3,):
 DEFAULT_STR_FILLER_CHAR = ' '
 DEFAULT_INT_FILLER_CHAR = '0'
 
+EOF_LF = '\n'
+EOF_CR = '\r'
+EOF_CR_LF = EOF_CR + EOF_LF
 
 def is_numerical(typ):
     return typ in (int, float, complex)
@@ -65,17 +68,19 @@ class PFFWriter(object):
     :param encoding: format to encode data in (utf-8 by default)
     :param autotruncate: if True, will truncate a value to its cell size instead of raising a ContentOverflow if too
                          long
+    :param eof: char for the End Of Line append after wrire each line, default is `\n`
     :param before_write: function called on the content of each cell before casting it to unicode and writing it
                          (cell: PFFCell, text: Any) -> Any
     """
 
-    def __init__(self, f, lines, encoding='utf-8', autotruncate=True, before_write=None):
+    def __init__(self, f, lines, encoding='utf-8', autotruncate=True, before_write=None, eof=EOF_LF):
         self._lines = lines
         self._file = f
         self.lcount = 0
         self._encoding = encoding
         self._autotruncate = autotruncate
         self._before_write = before_write
+        self.eof = eof
 
     def chose_line_model(self, vals):
         """ Can be overwritten
@@ -93,7 +98,7 @@ class PFFWriter(object):
         """
         line_model = line_model or self.chose_line_model(vals)
         self._file.write(line_model.write(
-            vals, encoding=self._encoding, autotruncate=self._autotruncate, before_write=self._before_write) + '\n')
+            vals, encoding=self._encoding, autotruncate=self._autotruncate, before_write=self._before_write) + self.eof)
         self.lcount += 1
 
 
@@ -399,3 +404,10 @@ class PFFIntSpaceCell(PFFIntCell):
         value = super(PFFIntSpaceCell, self)._justify(content, autotruncate)
         self.filler = DEFAULT_INT_FILLER_CHAR
         return value
+
+
+    def read(self, line, dest, after_read=None):
+        self.filler = DEFAULT_STR_FILLER_CHAR
+        result = super(PFFIntSpaceCell, self).read(line, dest, after_read=after_read)
+        self.filler = DEFAULT_INT_FILLER_CHAR
+        return result

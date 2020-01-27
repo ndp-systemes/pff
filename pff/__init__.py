@@ -26,3 +26,6 @@ from .pff import ContentOverflow
 from .pff import default_truncator
 from .pff import PFFIntSpaceCell
 from .pff import PFFIntCell
+from .pff import EOF_CR_LF
+from .pff import EOF_LF
+from .pff import EOF_CR
