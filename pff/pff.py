@@ -16,6 +16,10 @@
 #    You should have received a copy of the GNU Affero General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
+from __future__ import unicode_literals
+import sys
+if sys.version_info >= (3,):
+    unicode = str
 
 DEFAULT_STR_FILLER_CHAR = ' '
 DEFAULT_INT_FILLER_CHAR = '0'
@@ -30,12 +34,12 @@ def default_truncator(text, len):
 
 
 def default_before_write(cell, text):
-    return cell.type(text)
+    return text and cell.type(text) or text
 
 
 def default_after_read(cell, text):
     try:
-        return cell.type(text)
+        return text and cell.type(text)
     except (TypeError, ValueError):
         return text
 
@@ -49,7 +53,7 @@ class ContentOverflow(Exception):
         self._cell = cell
 
     def __str__(self):
-        return "Error: \"%s\" is longer than the cell %s (%d characters max)" %\
+        return "Error: \"%s\" is longer than the cell %s (%d characters max)" % \
                (self._content, self._cell.name, self._cell.size)
 
 
@@ -103,8 +107,8 @@ class PFFReader(object):
 
     """
 
-    def __init__(self, f, lines, after_read=None):
-        self._lines = lines
+    def __init__(self, f, lines=None, after_read=None):
+        self._lines = lines or []
         self._file = f
         self.lcount = 0
         self._after_read = after_read
@@ -167,7 +171,11 @@ class PFFLine(list):
         """
         line = ""
         for cell in self:
-            line += cell.write(vals, encoding=encoding, autotruncate=autotruncate, before_write=before_write)
+            try:
+                line += cell.write(vals, encoding=encoding, autotruncate=autotruncate, before_write=before_write)
+            except Exception as e:
+                print("Error when write cell %s" % cell.name)
+                raise e
         return line
 
     def read(self, line, after_read=None):
@@ -190,10 +198,20 @@ class PFFLine(list):
         """
         offset = 0
         output = u""
-        for cell in self:
-            output += "%5d %3d %s %s\n" % (offset, cell.length, cell.type, cell.name)
+        for idx, cell in enumerate(self, 1):
+            output += "%3d %5d %3d %s %s\n" % (idx, offset + 1, cell.length, cell.type, cell.name)
             offset += cell.length
+        output += "Total len %d\n" % (offset + 1)
         return output
+
+    def append(self, object):
+        if isinstance(object, PFFCell):
+            super(PFFLine, self).append(object)
+        elif isinstance(object, PFFLine):
+            self.extend(object)
+        else:
+            raise TypeError(u"unsupported operand type(s) for +=: '%s' and '%s'" %
+                            (type(self).__name__, type(object).__name__))
 
     def __add__(self, other):
         if isinstance(other, (PFFLine, PFFCell)):
@@ -202,13 +220,7 @@ class PFFLine(list):
                         (type(self).__name__, type(other).__name__))
 
     def __iadd__(self, other):
-        if isinstance(other, PFFCell):
-            self.append(other)
-        elif isinstance(other, PFFLine):
-            self.extend(other)
-        else:
-            raise TypeError(u"unsupported operand type(s) for +=: '%s' and '%s'" %
-                            (type(self).__name__, type(other).__name__))
+        self.append(other)
         return self
 
     def __eq__(self, other):
@@ -246,8 +258,6 @@ class PFFCell(object):
             align = is_numerical(type) and 'r' or 'l'
         if filler is None or len(filler) != 1:
             filler = is_numerical(type) and DEFAULT_INT_FILLER_CHAR or DEFAULT_STR_FILLER_CHAR
-        if default is None or len(default) > length:
-            default = is_numerical(type) and DEFAULT_INT_FILLER_CHAR or DEFAULT_STR_FILLER_CHAR
         self.name = name
         self.length = length
         self.type = type
@@ -285,8 +295,8 @@ class PFFCell(object):
             content_val = self.default
         before_write = self._before_write or before_write or default_before_write
         content_val = before_write(self, content_val)
-        content_str = unicode(content_val)
-        return self._justify(content_str, autotruncate=autotruncate).encode(encoding)
+        content_str = unicode(content_val or "")
+        return self._justify(content_str, autotruncate=autotruncate)
 
     def read(self, line, dest, after_read=None):
         """ Considering this line starts with the current field, reads it
@@ -304,7 +314,7 @@ class PFFCell(object):
         else:
             cur_field_val = cur_field_val.rstrip(self.filler)
         if not cur_field_val:
-            cur_field_val = self.default
+            cur_field_val = None
         after_read = self._after_read or after_read or default_after_read
         cur_field_val = after_read(self, cur_field_val)
         dest[self.name] = cur_field_val
@@ -348,3 +358,44 @@ class PFFBlankCell(PFFCell):
 
     def read(self, line, dest, after_read=None):
         return line[self.length:]
+
+
+class PFFIntCell(PFFCell):
+    """
+    This cell is a shortcut for a PFFCell of type `int`
+
+    sample:
+    cell = PFFIntCell("name', 5)
+    assert cell.write({cell.name:2}) == '00002'
+    assert cell.write({}) == '00000'
+    """
+
+    def __init__(self, name, length, align=None, default=None, truncator=default_truncator, before_write=None, after_read=None):
+        super(PFFIntCell, self).__init__(
+            name, length, int,
+            align=align, default=default,
+            truncator=truncator,
+            before_write=before_write,
+            after_read=after_read
+        )
+
+
+# TODO add a PFFDatetimeCell that take a format
+
+class PFFIntSpaceCell(PFFIntCell):
+    """
+    This cell is like an PFFIntCell except when no value is exist in the write then the char ('space'; " ") is used
+
+    sample:
+    cell = PFFIntSpaceCell("name', 5)
+    assert cell.write({cell.name:2}) == '00002'
+    assert cell.write({}) == '     ' <- or a classic in cell the result will be '00000'
+    """
+
+    def _justify(self, content, autotruncate=True):
+        if content:
+            return super(PFFIntSpaceCell, self)._justify(content, autotruncate)
+        self.filler = DEFAULT_STR_FILLER_CHAR
+        value = super(PFFIntSpaceCell, self)._justify(content, autotruncate)
+        self.filler = DEFAULT_INT_FILLER_CHAR
+        return value
