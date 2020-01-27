@@ -17,4 +17,12 @@
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-from .pff import PFFReader, PFFWriter, PFFLine, PFFCell, PFFBlankCell, ContentOverflow
+from .pff import PFFReader
+from .pff import PFFWriter
+from .pff import PFFLine
+from .pff import PFFCell
+from .pff import PFFBlankCell
+from .pff import ContentOverflow
+from .pff import default_truncator
+from .pff import PFFIntSpaceCell
+from .pff import PFFIntCell

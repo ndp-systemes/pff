@@ -18,9 +18,13 @@
 #
 
 import unittest
-from StringIO import StringIO
+import sys
+if sys.version_info >= (3,):
+    from io import StringIO
+else:
+    from StringIO import StringIO
 from datetime import date
-from pff import PFFWriter, PFFReader, PFFLine, PFFCell, ContentOverflow
+from pff import PFFWriter, PFFReader, PFFLine, PFFCell, ContentOverflow, PFFIntSpaceCell, PFFIntCell
 
 
 class TestPFFRW(unittest.TestCase):
@@ -189,6 +193,69 @@ class TestPFFOperatorOverload(unittest.TestCase):
         line = PFFLine(self.name_cell, self.age_cell)
         line += PFFLine(self.birth_cell, self.score_cell)
         self.assertEqual(line, PFFLine(self.name_cell, self.age_cell, self.birth_cell, self.score_cell))
+
+
+class TestPFFCodec(unittest.TestCase):
+
+    def test_valid_unicode(self):
+        self.name_cell = PFFCell('name', 5)
+        res = self.name_cell.write({'name': u"éàèäâ"}, "utf-8")
+        self.assertEqual(u"éàèäâ", res)
+        self.assertEqual(5, len(res))
+
+
+class TestPFFCellTyped(unittest.TestCase):
+
+    def test_PFFIntSpaceCell_write(self):
+        cell = PFFIntSpaceCell('name', 5)
+
+        res = cell.write({}, "utf-8")
+        self.assertEqual(u"     ", res)
+        self.assertEqual(5, len(res))
+
+        res = cell.write({'name': 20}, "utf-8")
+        self.assertEqual(u"00020", res)
+        self.assertEqual(5, len(res))
+
+        cell.default = 100
+        res = cell.write({'name': None}, "utf-8")
+        self.assertEqual(u"00100", res)
+        self.assertEqual(5, len(res))
+
+        res = cell.write({}, "utf-8")
+        self.assertEqual(u"00100", res)
+        self.assertEqual(5, len(res))
+
+    def test_PFFIntCell(self):
+        cell = PFFIntCell('name', 5)
+
+        res_write = cell.write({'name': None}, "utf-8")
+        self.assertEqual(u"00000", res_write)
+        self.assertEqual(5, len(res_write))
+
+        dest = {}
+        line = cell.read(res_write, dest)
+        self.assertFalse(line)
+        self.assertIsNone(dest['name'])
+
+        res_write = cell.write({}, "utf-8")
+        self.assertEqual(u"00000", res_write)
+        self.assertEqual(5, len(res_write))
+
+        dest = {}
+        line = cell.read(res_write, dest)
+        self.assertFalse(line)
+        self.assertIsNone(dest['name'])
+
+        cell.default = 100
+        res_write = cell.write({}, "utf-8")
+        self.assertEqual(u"00100", res_write)
+        self.assertEqual(5, len(res_write))
+
+        dest = {}
+        line = cell.read(res_write, dest)
+        self.assertFalse(line)
+        self.assertEqual(100, dest['name'])
 
 
 if __name__ == '__main__':
