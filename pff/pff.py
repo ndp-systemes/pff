@@ -20,6 +20,10 @@ from __future__ import unicode_literals
 import sys
 if sys.version_info >= (3,):
     unicode = str
+    encode = lambda string, encoding: string
+else:
+    encode = lambda string, encoding: string.encode(encoding)
+
 
 DEFAULT_STR_FILLER_CHAR = ' '
 DEFAULT_INT_FILLER_CHAR = '0'
@@ -27,6 +31,7 @@ DEFAULT_INT_FILLER_CHAR = '0'
 EOF_LF = '\n'
 EOF_CR = '\r'
 EOF_CR_LF = EOF_CR + EOF_LF
+
 
 def is_numerical(typ):
     return typ in (int, float, complex)
@@ -66,6 +71,8 @@ class PFFWriter(object):
     :param f: a file pointer, describing the file where lines will be written
     :param lines: a collection of `PFFLine`s, which will be used to format data and write them in `self.f`
     :param encoding: format to encode data in (utf-8 by default)
+                     In python3, it turns out that encoding is handled by the file object, which makes this parameter
+                     useless
     :param autotruncate: if True, will truncate a value to its cell size instead of raising a ContentOverflow if too
                          long
     :param eof: char for the End Of Line append after wrire each line, default is `\n`
@@ -80,7 +87,7 @@ class PFFWriter(object):
         self._encoding = encoding
         self._autotruncate = autotruncate
         self._before_write = before_write
-        self.eof = eof
+        self._eof = eof
 
     def chose_line_model(self, vals):
         """ Can be overwritten
@@ -97,8 +104,10 @@ class PFFWriter(object):
         :param line_model: `PFFLine` to use for this row. If None, then `self.chose_line_model` is called
         """
         line_model = line_model or self.chose_line_model(vals)
-        self._file.write(line_model.write(
-            vals, encoding=self._encoding, autotruncate=self._autotruncate, before_write=self._before_write) + self.eof)
+        self._file.write(encode(
+            line_model.write(vals, autotruncate=self._autotruncate, before_write=self._before_write) + self._eof,
+            self._encoding
+        ))
         self.lcount += 1
 
 
@@ -163,11 +172,10 @@ class PFFLine(list):
             elif isinstance(elem, PFFLine):
                 self.extend(elem)
 
-    def write(self, vals, encoding, autotruncate=True, before_write=None):
+    def write(self, vals, autotruncate=True, before_write=None):
         """ Write values in vals in the `PFFCell`s contained in this line, and outputs a str corresponding to them
 
         :param vals: values to write
-        :param encoding: format to encode the values in
         :param autotruncate: if True, will truncate a value to its cell size instead of raising a ContentOverflow if
                              too long
         :param before_write: function called on the content of each cell before casting it to unicode and writing it
@@ -177,7 +185,7 @@ class PFFLine(list):
         line = ""
         for cell in self:
             try:
-                line += cell.write(vals, encoding=encoding, autotruncate=autotruncate, before_write=before_write)
+                line += cell.write(vals, autotruncate=autotruncate, before_write=before_write)
             except Exception as e:
                 print("Error when write cell %s" % cell.name)
                 raise e
@@ -283,11 +291,10 @@ class PFFCell(object):
         elif self.align == 'r':
             return content.rjust(self.length, self.filler)
 
-    def write(self, vals, encoding, autotruncate=True, before_write=None):
+    def write(self, vals, autotruncate=True, before_write=None):
         """ Given a dict of values, takes this field's value, and formats it to fill this cell
 
         :param vals: dict of values for the cell's line
-        :param encoding: format to encode the values in
         :param autotruncate: if True, will truncate a value to its cell size instead of raising a ContentOverflow if
                              too long
         :param before_write: function called on the cell content before casting it to unicode and writing it
