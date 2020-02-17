@@ -365,7 +365,7 @@ class PFFBlankCell(PFFCell):
     def __init__(self, length, name=None, filler=' '):
         super(PFFBlankCell, self).__init__(name or 'BLANK', length, type(None), filler)
 
-    def write(self, vals, encoding, autotruncate=True, before_write=None):
+    def write(self, vals, autotruncate=True, before_write=None):
         return self.filler * self.length
 
     def read(self, line, dest, after_read=None):
@@ -382,7 +382,8 @@ class PFFIntCell(PFFCell):
     assert cell.write({}) == '00000'
     """
 
-    def __init__(self, name, length, align=None, default=None, truncator=default_truncator, before_write=None, after_read=None):
+    def __init__(self, name, length, align=None, default=None, truncator=default_truncator, before_write=None,
+                 after_read=None):
         super(PFFIntCell, self).__init__(
             name, length, int,
             align=align, default=default,
@@ -411,7 +412,6 @@ class PFFIntSpaceCell(PFFIntCell):
         value = super(PFFIntSpaceCell, self)._justify(content, autotruncate)
         self.filler = DEFAULT_INT_FILLER_CHAR
         return value
-
 
     def read(self, line, dest, after_read=None):
         self.filler = DEFAULT_STR_FILLER_CHAR
