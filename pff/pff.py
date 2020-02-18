@@ -365,7 +365,7 @@ class PFFBlankCell(PFFCell):
     def __init__(self, length, name=None, filler=' '):
         super(PFFBlankCell, self).__init__(name or 'BLANK', length, type(None), filler)
 
-    def write(self, vals, encoding, autotruncate=True, before_write=None):
+    def write(self, vals, autotruncate=True, before_write=None):
         return self.filler * self.length
 
     def read(self, line, dest, after_read=None):
