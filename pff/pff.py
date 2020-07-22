@@ -18,12 +18,10 @@
 #
 from __future__ import unicode_literals
 import sys
+
 if sys.version_info >= (3,):
     unicode = str
-    encode = lambda string, encoding: string
-else:
-    encode = lambda string, encoding: string.encode(encoding)
-
+encode = lambda string, encoding: string.encode(encoding)
 
 DEFAULT_STR_FILLER_CHAR = ' '
 DEFAULT_INT_FILLER_CHAR = '0'
