@@ -24,7 +24,7 @@ if sys.version_info >= (3,):
 else:
     from StringIO import StringIO
 from datetime import date
-from pff import PFFWriter, PFFReader, PFFLine, PFFCell, ContentOverflow, PFFIntSpaceCell, PFFIntCell
+from pff import PFFWriter, PFFReader, PFFLine, PFFCell, ContentOverflow, PFFIntSpaceCell, PFFIntCell, WriteError
 
 
 class TestPFFRW(unittest.TestCase):
@@ -122,6 +122,10 @@ class TestPFFWrite(TestPFFRW):
 
         values = lower_reader.readline()
         self.assertDictEqual(values, {'name': "Sacha", 'favourite': "pikachu"})
+
+    def test_20_exception_if_invalid_type(self):
+        with self.assertRaises(WriteError):
+            self.writer.writerow({'name': "Sacha", 'age': "error", 'score': 42.0})
 
 
 class TestPFFRead(TestPFFRW):
