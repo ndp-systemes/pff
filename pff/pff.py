@@ -50,6 +50,22 @@ def default_after_read(cell, text):
         return text
 
 
+class WriteError(Exception):
+    """ Generic exception raised when a PFFCell write has failed """
+
+    def __init__(self, original_exception, cell, content):
+        self._exception = original_exception
+        self._cell = cell
+        self._content = content
+
+    def __str__(self):
+        return u"Error while writing value \"%s\" (%s) in cell %s :\n%s" % \
+               (self._content, type(self._content), self._cell.name, self._exception)
+
+    def __repr__(self):
+        return u"<WriteError on %s : %s>" % (self._cell.name, type(self._exception))
+
+
 class ContentOverflow(Exception):
     """ Exception raised when the content of a `PFFCell` is larger than the cell itself """
 
@@ -59,8 +75,11 @@ class ContentOverflow(Exception):
         self._cell = cell
 
     def __str__(self):
-        return "Error: \"%s\" is longer than the cell %s (%d characters max)" % \
-               (self._content, self._cell.name, self._cell.size)
+        return "\"%s\" is longer than the cell %s (%d characters max)" % \
+               (self._content, self._cell.name, self._cell.length)
+
+    def __repr__(self):
+        return u"<ContentOverflow on %s>" % self._cell.name
 
 
 class PFFWriter(object):
@@ -184,9 +203,10 @@ class PFFLine(list):
         for cell in self:
             try:
                 line += cell.write(vals, autotruncate=autotruncate, before_write=before_write)
-            except Exception as e:
-                print("Error when write cell %s" % cell.name)
+            except ContentOverflow as e:
                 raise e
+            except Exception as e:
+                raise WriteError(e, cell, vals.get(cell.name, cell.default))
         return line
 
     def read(self, line, after_read=None):
@@ -347,6 +367,9 @@ class PFFCell(object):
 
     def __ne__(self, other):
         return not self == other
+
+    def __repr__(self):
+        return u"<PFFCell %s (%s, %d chars)>" % (self.name, self.type, self.length)
 
 
 class PFFBlankCell(PFFCell):
