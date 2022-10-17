@@ -327,7 +327,7 @@ class PFFCell(object):
             content_val = self.default
         before_write = self._before_write or before_write or default_before_write
         content_val = before_write(self, content_val)
-        content_str = unicode(content_val or "")
+        content_str = unicode(content_val or "").replace('\n', ' ')
         return self._justify(content_str, autotruncate=autotruncate)
 
     def read(self, line, dest, after_read=None):

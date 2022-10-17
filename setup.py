@@ -22,7 +22,7 @@ from distutils.core import setup
 
 setup(
     name='PFF',
-    version='1.2.0',
+    version='1.2.1',
     description='Positional Flat File',
     author='Alexis Braine',
     author_email='alexis.braine@ndp-systemes.fr',
